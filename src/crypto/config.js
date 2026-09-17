@@ -50,6 +50,12 @@ export const WASH_PACKAGES = [
       BTC: '0.000022 BTC',
       DOGE: '12 DOGE'
     },
+    numericAmounts: {
+      ETH: 0.00045,
+      SOL: 0.012,
+      BTC: 0.000022,
+      DOGE: 12
+    },
     popular: false
   },
   {
@@ -63,6 +69,12 @@ export const WASH_PACKAGES = [
       BTC: '0.000050 BTC',
       DOGE: '25 DOGE'
     },
+    numericAmounts: {
+      ETH: 0.0010,
+      SOL: 0.025,
+      BTC: 0.000050,
+      DOGE: 25
+    },
     popular: true
   },
   {
@@ -75,6 +87,12 @@ export const WASH_PACKAGES = [
       SOL: '0.060 SOL',
       BTC: '0.000120 BTC',
       DOGE: '60 DOGE'
+    },
+    numericAmounts: {
+      ETH: 0.0025,
+      SOL: 0.060,
+      BTC: 0.000120,
+      DOGE: 60
     },
     popular: false
   }

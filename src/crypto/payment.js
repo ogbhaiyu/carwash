@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { WALLET_CONFIG, WASH_PACKAGES } from './config.js';
 import { soundEngine } from '../audio/soundEngine.js';
+import { verifyOnChainPayment } from './verifier.js';
 
 export class PaymentModal {
   constructor(onPaymentVerified) {
@@ -88,14 +89,15 @@ export class PaymentModal {
           <!-- Verification Action -->
           <div class="verification-card">
             <div class="tx-input-row">
-              <input type="text" id="txHashInput" placeholder="Enter Tx Hash or Sender Handle (e.g. 0x... / Robinhood)" />
+              <input type="text" id="txHashInput" placeholder="Enter Transaction ID / Hash" />
             </div>
+            <div id="verifyAlertContainer"></div>
             <button class="pay-confirm-btn" id="confirmPaymentBtn">
-              <span class="btn-emoji">💸</span>
-              <span class="btn-text">I HAVE SENT THE CRYPTO &rarr; WASH MY CAR</span>
+              <span class="btn-emoji">🔍</span>
+              <span class="btn-text">VERIFY ON-CHAIN & WASH CAR</span>
             </button>
             <div class="security-note">
-              <span>🔒 Direct P2P to Robinhood Wallet. No middleman. Bhai will start dancing immediately.</span>
+              <span>🔒 100% Real On-Chain RPC Check. Funds must be verified on public blockchain before washing begins.</span>
             </div>
           </div>
         </div>
@@ -159,25 +161,112 @@ export class PaymentModal {
       });
     });
 
-    // Confirm Payment & Trigger Wash
+    // Confirm Payment & Trigger Wash with Live On-Chain Verification
     const confirmBtn = this.modalEl.querySelector('#confirmPaymentBtn');
-    confirmBtn.addEventListener('click', () => {
-      const txInput = this.modalEl.querySelector('#txHashInput').value.trim();
-      const txId = txInput || ('0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
+    confirmBtn.addEventListener('click', async () => {
+      const alertContainer = this.modalEl.querySelector('#verifyAlertContainer');
+      const txInput = this.modalEl.querySelector('#txHashInput');
+      const txHash = txInput.value.trim();
+      const btnText = confirmBtn.querySelector('.btn-text');
+      const btnEmoji = confirmBtn.querySelector('.btn-emoji');
 
-      // Play Robinhood cash register sound
-      soundEngine.playCashRegister();
+      alertContainer.innerHTML = '';
 
-      this.hide();
+      if (!txHash) {
+        alertContainer.innerHTML = `
+          <div class="verify-error-banner">
+            <span>⚠️</span>
+            <div><strong>Transaction Hash Required:</strong> Please send the crypto to Bhai's Robinhood address above, then paste your transaction hash/ID to verify on-chain!</div>
+          </div>
+        `;
+        txInput.focus();
+        return;
+      }
 
-      if (this.onPaymentVerified) {
-        this.onPaymentVerified({
-          package: this.selectedPackage,
-          crypto: this.selectedCrypto,
-          amount: this.selectedPackage.cryptoAmounts[this.selectedCrypto],
-          txId: txId,
-          timestamp: new Date().toLocaleTimeString()
-        });
+      // Enter loading state
+      confirmBtn.disabled = true;
+      txInput.disabled = true;
+      confirmBtn.classList.add('verifying');
+      btnEmoji.textContent = '⏳';
+      btnText.textContent = `VERIFYING ON ${this.selectedCrypto} BLOCKCHAIN...`;
+
+      alertContainer.innerHTML = `
+        <div class="verify-status-banner">
+          <span>📡</span>
+          <div>Connecting to ${this.selectedCrypto} public RPC nodes... verifying confirmation, recipient & amount.</div>
+        </div>
+      `;
+
+      try {
+        const verifyResult = await verifyOnChainPayment(this.selectedCrypto, txHash, this.selectedPackage);
+
+        if (!verifyResult.success) {
+          // Failure
+          confirmBtn.disabled = false;
+          txInput.disabled = false;
+          confirmBtn.classList.remove('verifying');
+          btnEmoji.textContent = '🔍';
+          btnText.textContent = 'VERIFY ON-CHAIN & WASH CAR';
+
+          alertContainer.innerHTML = `
+            <div class="verify-error-banner">
+              <span>❌</span>
+              <div><strong>Verification Failed:</strong> ${verifyResult.error}</div>
+            </div>
+          `;
+          return;
+        }
+
+        // Success!
+        confirmBtn.classList.remove('verifying');
+        confirmBtn.classList.add('verified');
+        btnEmoji.textContent = '✅';
+        btnText.textContent = `CONFIRMED! ${verifyResult.amountReceived} RECEIVED`;
+
+        alertContainer.innerHTML = `
+          <div class="verify-status-banner" style="color: #4ade80; border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.1);">
+            <span>🎉</span>
+            <div><strong>Payment Confirmed On-Chain!</strong> Starting Bhai's detailing sequence...</div>
+          </div>
+        `;
+
+        soundEngine.playCashRegister();
+
+        setTimeout(() => {
+          this.hide();
+          confirmBtn.disabled = false;
+          txInput.disabled = false;
+          confirmBtn.classList.remove('verified');
+          btnEmoji.textContent = '🔍';
+          btnText.textContent = 'VERIFY ON-CHAIN & WASH CAR';
+          alertContainer.innerHTML = '';
+          txInput.value = '';
+
+          if (this.onPaymentVerified) {
+            this.onPaymentVerified({
+              package: this.selectedPackage,
+              crypto: this.selectedCrypto,
+              amount: verifyResult.amountReceived || this.selectedPackage.cryptoAmounts[this.selectedCrypto],
+              txId: verifyResult.txId,
+              explorerUrl: verifyResult.explorerUrl,
+              timestamp: new Date().toLocaleTimeString()
+            });
+          }
+        }, 1200);
+
+      } catch (err) {
+        confirmBtn.disabled = false;
+        txInput.disabled = false;
+        confirmBtn.classList.remove('verifying');
+        btnEmoji.textContent = '🔍';
+        btnText.textContent = 'VERIFY ON-CHAIN & WASH CAR';
+
+        alertContainer.innerHTML = `
+          <div class="verify-error-banner">
+            <span>⚠️</span>
+            <div><strong>Network Query Error:</strong> ${err.message}. Please verify your connection or try again.</div>
+          </div>
+        `;
       }
     });
   }
@@ -192,6 +281,18 @@ export class PaymentModal {
     addrInput.value = config.address;
     netName.textContent = config.network;
     amountVal.textContent = `${this.selectedPackage.cryptoAmounts[this.selectedCrypto]} (${this.selectedPackage.priceUsd})`;
+
+    const txInput = this.modalEl.querySelector('#txHashInput');
+    const alertContainer = this.modalEl.querySelector('#verifyAlertContainer');
+    if (alertContainer) alertContainer.innerHTML = '';
+
+    const placeholders = {
+      SOL: 'Paste 88-char Solana Signature (from Phantom / Robinhood)',
+      ETH: 'Paste 66-char Ethereum Tx Hash (0x... from MetaMask / Robinhood)',
+      BTC: 'Paste 64-char Bitcoin Tx ID (from Robinhood / wallet)',
+      DOGE: 'Paste 64-char Dogecoin Tx ID (from Robinhood / wallet)'
+    };
+    if (txInput) txInput.placeholder = placeholders[this.selectedCrypto] || 'Enter Transaction ID / Hash';
 
     // Generate Scannable QR Code - raw clean address for 100% wallet & scanner compatibility (no solana: or ethereum: prefix)
     const qrData = config.address;

@@ -52,6 +52,10 @@ export class InvoiceModal {
             <label>CLEANED BY:</label>
             <span>Bhai (10x Mobile Detailer & Ex-Founder)</span>
           </div>
+          <div class="detail-item full-width" id="invTxRow" style="grid-column: span 2;">
+            <label>ON-CHAIN VERIFIED TX:</label>
+            <a id="invTxLink" href="#" target="_blank" rel="noopener noreferrer" style="color: #0284c7; font-family: monospace; font-size: 11px; font-weight: bold; text-decoration: underline;">0x... ↗</a>
+          </div>
         </div>
 
         <div class="invoice-table">
@@ -172,6 +176,18 @@ export class InvoiceModal {
     this.modalEl.querySelector('#invPlate').textContent = carData.plate;
     this.modalEl.querySelector('#invBasePrice').textContent = `${paymentData.package.priceUsd} (${paymentData.amount})`;
     this.modalEl.querySelector('#invTotal').textContent = `${paymentData.package.priceUsd} (${paymentData.amount})`;
+
+    const txLink = this.modalEl.querySelector('#invTxLink');
+    if (paymentData.txId && paymentData.explorerUrl) {
+      const shortId = paymentData.txId.length > 20
+        ? `${paymentData.txId.slice(0, 10)}...${paymentData.txId.slice(-6)}`
+        : paymentData.txId;
+      txLink.textContent = `${paymentData.crypto} TX: ${shortId} ↗ (View on Explorer)`;
+      txLink.href = paymentData.explorerUrl;
+      txLink.parentElement.style.display = 'block';
+    } else {
+      txLink.parentElement.style.display = 'none';
+    }
 
     this.modalEl.classList.remove('hidden');
 

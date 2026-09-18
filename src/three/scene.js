@@ -663,8 +663,7 @@ export class WashScene {
     // Smooth pointer drag orbit controls (manual rotation only)
     this.isDragging = false;
     this.previousMousePosition = { x: 0, y: 0 };
-    // Exact zoomed-in hero framing: front 3/4 view, centered car & FTX sign
-    this.defaultCameraAngle = { theta: 0.14, phi: 0.18, radius: 8.2 };
+    this.updateCameraForDevice();
     this.cameraAngle = { ...this.defaultCameraAngle };
 
     const dom = this.renderer.domElement;
@@ -732,7 +731,22 @@ export class WashScene {
     this.camera.lookAt(0, 1.15, -0.4);
   }
 
+  updateCameraForDevice() {
+    const aspect = this.width / this.height;
+    if (aspect < 1.0) {
+      // Mobile portrait screen: widen vertical FOV and adjust default angle so Bhai and car are fully framed
+      this.camera.fov = Math.min(64, Math.max(45, 45 / Math.pow(aspect, 0.52)));
+      this.defaultCameraAngle = { theta: 0.14, phi: 0.22, radius: 9.6 };
+    } else {
+      // Desktop / Landscape: approved hero zoomed-in framing
+      this.camera.fov = 45;
+      this.defaultCameraAngle = { theta: 0.14, phi: 0.18, radius: 8.2 };
+    }
+    this.camera.updateProjectionMatrix();
+  }
+
   resetCamera() {
+    this.updateCameraForDevice();
     this.cameraAngle = { ...this.defaultCameraAngle };
     this.updateCameraPos();
   }
@@ -873,8 +887,9 @@ export class WashScene {
     this.width = this.container.clientWidth;
     this.height = this.container.clientHeight;
     this.camera.aspect = this.width / this.height;
-    this.camera.updateProjectionMatrix();
+    this.updateCameraForDevice();
     this.renderer.setSize(this.width, this.height);
+    this.updateCameraPos();
   }
 
   render() {
